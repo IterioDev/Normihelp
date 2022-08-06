@@ -18,17 +18,21 @@ namespace Normihelp
 
         private static void SetupFileMonitor(string targetFilePath)
         {
-            FileSystemWatcher fwatcher = new FileSystemWatcher();
-            fwatcher.Path = Directory.GetParent(targetFilePath).FullName;
-            fwatcher.Filter = Path.GetFileName(targetFilePath);
-            fwatcher.NotifyFilter = NotifyFilters.LastWrite;
-            fwatcher.Changed += (s, e) =>
+            new Thread(() => 
             {
-                fwatcher.EnableRaisingEvents = false;
-                GetNorminetteOutput(targetFilePath);
-                fwatcher.EnableRaisingEvents = true;
-            };
-            fwatcher.EnableRaisingEvents = true;
+                FileInfo lastFileInfo = new FileInfo(targetFilePath);
+                while (true)
+                {
+                    FileInfo fileInfo = new FileInfo(targetFilePath);
+                    if (fileInfo.LastWriteTime > lastFileInfo.LastWriteTime)
+                    {
+                        GetNorminetteOutput(targetFilePath);
+                        lastFileInfo = fileInfo;
+                    }
+
+                    Thread.Sleep(1000);
+                }
+            }).Start();
         }
 
         static void GetNorminetteOutput(string targetFilePath)
@@ -56,16 +60,24 @@ namespace Normihelp
                 return;
 
             var data = e.Data.Replace("  ", " ");
-            string errorInfo = Regex.Match(data, ":	(.*)").Groups[1].Value.Trim();
-            string lineInfo = Regex.Match(data, "line: (.*),").Groups[1].Value.Trim();
-            string columnInfo = Regex.Match(data, "col: (.*)\\)").Groups[1].Value.Trim();
 
-            //Validity Check
-            if (errorInfo == "" || lineInfo == "" || columnInfo == "")
-                return;
+            if (data.Contains("OK"))
+            {
+                Console.WriteLine("No errors found! :)");
+            }
+            else
+            {
+                string errorInfo = Regex.Match(data, ":	(.*)").Groups[1].Value.Trim();
+                string lineInfo = Regex.Match(data, "line: (.*),").Groups[1].Value.Trim();
+                string columnInfo = Regex.Match(data, "col: (.*)\\)").Groups[1].Value.Trim();
 
-            //Output
-            Console.WriteLine($"Error: {errorInfo} @ Pos {columnInfo} on Line {lineInfo}");
+                //Validity Check
+                if (errorInfo == "" || lineInfo == "" || columnInfo == "")
+                    return;
+
+                //Output
+                Console.WriteLine($"Error: {errorInfo} @ Pos {columnInfo} on Line {lineInfo}");
+            }
         }
     }
 }
